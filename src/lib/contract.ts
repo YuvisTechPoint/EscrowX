@@ -22,6 +22,30 @@ export async function getContract(withSigner = true): Promise<Contract> {
   return new Contract(contractAddress, abi, runner);
 }
 
+async function contractHasSelector(contract: Contract, selector: string): Promise<boolean> {
+  try {
+    const runner = contract.runner as
+      | { provider?: { getCode: (address: string) => Promise<string> }; getCode?: (address: string) => Promise<string> }
+      | null;
+
+    const getCode = runner?.provider?.getCode ?? runner?.getCode;
+    if (!getCode) {
+      return true;
+    }
+
+    const contractAddress = await contract.getAddress();
+    const code = await getCode(contractAddress);
+    if (!code || code === "0x") {
+      return false;
+    }
+
+    return code.toLowerCase().includes(selector.toLowerCase().replace("0x", ""));
+  } catch {
+    // If bytecode probing fails, don't block transactions by default.
+    return true;
+  }
+}
+
 export async function createEscrow(
   seller: string,
   amount: string,
@@ -29,9 +53,13 @@ export async function createEscrow(
 ): Promise<{ hash: string }> {
   try {
     const contract = await getContract(true);
+    const parsedAmount = ethers.parseEther(amount);
+    if (parsedAmount <= 0n) {
+      throw new Error("Amount must be greater than 0.");
+    }
 
     const tx = await contract.createEscrow(seller, description, {
-      value: ethers.parseEther(amount),
+      value: parsedAmount,
     });
 
     const receipt = await tx.wait();
@@ -51,10 +79,34 @@ export async function createEscrowWithDeadline(
 ): Promise<{ hash: string }> {
   try {
     const contract = await getContract(true);
+    const parsedAmount = ethers.parseEther(amount);
+    if (parsedAmount <= 0n) {
+      throw new Error("Amount must be greater than 0.");
+    }
+
     const normalizedDays = Number.isFinite(deadlineDays) ? Math.max(0, Math.floor(deadlineDays)) : 0;
 
+    // Backward compatibility: older deployed contracts only expose createEscrow(address,string).
+    if (normalizedDays === 0) {
+      const tx = await contract.createEscrow(seller, description, {
+        value: parsedAmount,
+      });
+
+      const receipt = await tx.wait();
+      console.log("createEscrow (no deadline) tx receipt:", receipt);
+      return { hash: tx.hash };
+    }
+
+    const deadlineSelector = ethers.id("createEscrowWithDeadline(address,string,uint256)").slice(0, 10);
+    const supportsDeadline = await contractHasSelector(contract, deadlineSelector);
+    if (!supportsDeadline) {
+      throw new Error(
+        "Deployed contract does not support deadline escrows. Set deadline days to 0 or redeploy the latest contract."
+      );
+    }
+
     const tx = await contract.createEscrowWithDeadline(seller, description, normalizedDays, {
-      value: ethers.parseEther(amount),
+      value: parsedAmount,
     });
 
     const receipt = await tx.wait();

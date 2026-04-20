@@ -127,6 +127,8 @@ export default function CreateEscrowPage() {
           ? "Insufficient funds for transaction + gas."
           : message.includes("Buyer and seller cannot be same")
             ? "Seller address cannot be your own connected wallet. Use a different seller wallet."
+            : message.includes("does not support deadline escrows")
+              ? "This deployed contract version does not support deadlines. Set deadline to 0 or redeploy the latest contract."
           : message;
 
       setTxState({ isOpen: true, status: "error", message: prettyMessage });
