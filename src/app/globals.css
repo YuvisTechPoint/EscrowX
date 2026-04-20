@@ -1,0 +1,67 @@
+@import "tailwindcss/base";
+@import "tailwindcss/components";
+@import "tailwindcss/utilities";
+
+:root {
+  --background: 210 40% 98%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 217 91% 60%;
+  --secondary: 210 40% 96%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 217 91% 60%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 224 33% 6%;
+  --foreground: 210 40% 98%;
+  --card: 224 30% 8%;
+  --card-foreground: 210 40% 98%;
+  --popover: 224 30% 8%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 217 91% 60%;
+  --secondary: 223 25% 14%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 223 25% 14%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 223 25% 14%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 50.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 223 25% 18%;
+  --input: 223 25% 18%;
+  --ring: 217 91% 60%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  min-height: 100vh;
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.2), transparent 30%),
+    radial-gradient(circle at 90% 10%, rgba(14, 165, 233, 0.15), transparent 35%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(239, 246, 255, 0.8));
+}
+
+.dark body {
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.2), transparent 30%),
+    radial-gradient(circle at 85% 15%, rgba(14, 165, 233, 0.2), transparent 30%),
+    linear-gradient(180deg, rgba(10, 12, 18, 0.95), rgba(4, 8, 15, 0.95));
+}

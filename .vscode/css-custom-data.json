@@ -1,0 +1,25 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@tailwind",
+      "description": "Inject Tailwind's base, components, or utilities layers."
+    },
+    {
+      "name": "@apply",
+      "description": "Inline existing utility classes into custom CSS rules."
+    },
+    {
+      "name": "@layer",
+      "description": "Place custom styles into Tailwind's layer system."
+    },
+    {
+      "name": "@config",
+      "description": "Specify a Tailwind config file path."
+    },
+    {
+      "name": "@variants",
+      "description": "Generate styles for specific variants (legacy Tailwind directive)."
+    }
+  ]
+}

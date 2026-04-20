@@ -1,0 +1,168 @@
+[
+  {
+    "inputs": [],
+    "name": "subscriptionCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "_seller", "type": "address" },
+      { "internalType": "uint256", "name": "_cycles", "type": "uint256" },
+      { "internalType": "uint256", "name": "_intervalSeconds", "type": "uint256" },
+      { "internalType": "string", "name": "_description", "type": "string" }
+    ],
+    "name": "createSubscription",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_subId", "type": "uint256" }],
+    "name": "triggerRelease",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_subId", "type": "uint256" }],
+    "name": "cancelSubscription",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_subId", "type": "uint256" }],
+    "name": "topUpSubscription",
+    "outputs": [],
+    "stateMutability": "payable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_subId", "type": "uint256" }],
+    "name": "getSubscription",
+    "outputs": [
+      {
+        "components": [
+          { "internalType": "uint256", "name": "id", "type": "uint256" },
+          { "internalType": "address", "name": "buyer", "type": "address" },
+          { "internalType": "address", "name": "seller", "type": "address" },
+          { "internalType": "uint256", "name": "amountPerCycle", "type": "uint256" },
+          { "internalType": "uint256", "name": "totalCycles", "type": "uint256" },
+          { "internalType": "uint256", "name": "cyclesCompleted", "type": "uint256" },
+          { "internalType": "uint256", "name": "nextReleaseAt", "type": "uint256" },
+          { "internalType": "uint256", "name": "intervalSeconds", "type": "uint256" },
+          { "internalType": "uint256", "name": "vaultBalance", "type": "uint256" },
+          { "internalType": "uint8", "name": "status", "type": "uint8" },
+          { "internalType": "string", "name": "description", "type": "string" },
+          { "internalType": "uint256", "name": "createdAt", "type": "uint256" }
+        ],
+        "internalType": "struct SubscriptionEscrow.Subscription",
+        "name": "",
+        "type": "tuple"
+      }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_buyer", "type": "address" }],
+    "name": "getBuyerSubscriptions",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_seller", "type": "address" }],
+    "name": "getSellerSubscriptions",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "_buyer", "type": "address" }],
+    "name": "getActiveSubscriptions",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_subId", "type": "uint256" }],
+    "name": "isReleaseReady",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_subId", "type": "uint256" }],
+    "name": "getTimeUntilNextRelease",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "_subId", "type": "uint256" }],
+    "name": "getProgressBps",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "subscriptions",
+    "outputs": [
+      { "internalType": "uint256", "name": "id", "type": "uint256" },
+      { "internalType": "address", "name": "buyer", "type": "address" },
+      { "internalType": "address", "name": "seller", "type": "address" },
+      { "internalType": "uint256", "name": "amountPerCycle", "type": "uint256" },
+      { "internalType": "uint256", "name": "totalCycles", "type": "uint256" },
+      { "internalType": "uint256", "name": "cyclesCompleted", "type": "uint256" },
+      { "internalType": "uint256", "name": "nextReleaseAt", "type": "uint256" },
+      { "internalType": "uint256", "name": "intervalSeconds", "type": "uint256" },
+      { "internalType": "uint256", "name": "vaultBalance", "type": "uint256" },
+      { "internalType": "uint8", "name": "status", "type": "uint8" },
+      { "internalType": "string", "name": "description", "type": "string" },
+      { "internalType": "uint256", "name": "createdAt", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "subscriptionId", "type": "uint256" },
+      { "indexed": true, "internalType": "address", "name": "buyer", "type": "address" },
+      { "indexed": true, "internalType": "address", "name": "seller", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amountPerCycle", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "totalCycles", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "intervalSeconds", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "nextReleaseAt", "type": "uint256" },
+      { "indexed": false, "internalType": "string", "name": "description", "type": "string" }
+    ],
+    "name": "SubscriptionCreated",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "subscriptionId", "type": "uint256" },
+      { "indexed": true, "internalType": "uint256", "name": "cycleNumber", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "releasedAt", "type": "uint256" },
+      { "indexed": false, "internalType": "address", "name": "triggeredBy", "type": "address" }
+    ],
+    "name": "CycleReleased",
+    "type": "event"
+  },
+  {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "uint256", "name": "subscriptionId", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "refundAmount", "type": "uint256" },
+      { "indexed": false, "internalType": "uint256", "name": "cancelledAt", "type": "uint256" }
+    ],
+    "name": "SubscriptionCancelled",
+    "type": "event"
+  }
+]

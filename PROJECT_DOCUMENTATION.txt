@@ -1,0 +1,762 @@
+================================================================================
+           DECENTRALIZED ESCROW MARKETPLACE (EscrowX) - END-TO-END PROJECT DOCUMENTATION
+================================================================================
+
+Version: 1.0.0
+Last Updated: March 2026
+Document Type: Technical Specification & Architecture Overview
+
+================================================================================
+                          TABLE OF CONTENTS
+================================================================================
+
+1. EXECUTIVE SUMMARY
+2. PROJECT OVERVIEW
+3. SYSTEM ARCHITECTURE
+4. SMART CONTRACT LAYER (Backend)
+   4.1 Contract Structure
+   4.2 Data Models
+   4.3 Functions & Events
+   4.4 Security Mechanisms
+5. FRONTEND APPLICATION
+   5.1 Framework & Stack
+   5.2 Application Pages
+   5.3 Component Architecture
+   5.4 State Management
+6. WEB3 INTEGRATION
+   7.1 Wallet Connection
+   7.2 Contract Interaction
+   7.3 Network Configuration
+7. DEPLOYMENT & OPERATIONS
+   7.1 Development Environment
+   7.2 Testing Strategy
+   7.3 Deployment Process
+8. USER FLOWS
+9. SECURITY CONSIDERATIONS
+10. PROJECT STRUCTURE
+11. SETUP INSTRUCTIONS
+12. TECHNICAL GLOSSARY
+
+================================================================================
+1. EXECUTIVE SUMMARY
+================================================================================
+
+The Decentralized Escrow Marketplace (EscrowX) is a full-stack Web3 application
+that enables trustless peer-to-peer transactions on the Ethereum blockchain.
+The platform allows buyers to lock Sepolia ETH (testnet) in a smart contract,
+which can later be released to the seller or refunded to the buyer, eliminating
+the need for trusted third parties in online transactions.
+
+Key Value Propositions:
+- Decentralized: No intermediary required for fund management
+- Transparent: All transactions recorded on public blockchain
+- Secure: Smart contract enforces rules automatically
+- Trustless: Cryptographic guarantees replace human trust
+
+================================================================================
+2. PROJECT OVERVIEW
+================================================================================
+
+2.1 PURPOSE
+-----------
+The application solves the trust problem in peer-to-peer transactions by:
+1. Holding buyer funds in escrow until goods/services are delivered
+2. Enabling buyer-controlled release of payment to seller
+3. Providing buyer recourse through refund mechanism
+4. Recording all transaction metadata immutably on-chain
+
+2.2 TARGET USERS
+----------------
+- Primary: Buyers wanting security when purchasing from unknown sellers
+- Secondary: Sellers seeking to demonstrate trustworthiness
+- Tertiary: Developers learning Web3 development patterns
+
+2.3 SCOPE
+---------
+IN SCOPE:
+- Escrow creation with ETH deposits
+- Buyer-controlled release/refund flows
+- Multi-role dashboard (buyer/seller views)
+- Real-time transaction status updates
+- MetaMask wallet integration
+- Sepolia testnet deployment
+
+OUT OF SCOPE:
+- Multi-token support (ERC-20)
+- Dispute resolution/arbitration
+- Mainnet deployment (requires audit)
+- Mobile native apps
+- Seller-initiated actions
+
+================================================================================
+3. SYSTEM ARCHITECTURE
+================================================================================
+
+3.1 HIGH-LEVEL ARCHITECTURE
+----------------------------
+
+    +------------------------+          +------------------------------+
+    |  User Browser          |          |  Ethereum Sepolia Network    |
+    |  - MetaMask Extension  |          |                              |
+    |  - React Frontend      +--------->+  EscrowMarketplace Contract  |
+    |  - Wallet Connection   |  signed  |  - Escrow records            |
+    |                        |   txns   |  - ETH transfers             |
+    +-----------+------------+          +---------------+--------------+
+                |                                        ^
+                |  Web3 RPC calls                        |
+                v                                      |
+    +------------------------+                         |
+    |  Next.js 14 Application|                         |
+    |  - App Router          |                         |
+    |  - API Routes          |                         |
+    |  - Static Pages        |                         |
+    +------------------------+                         |
+                |                                      |
+                |  Contract calls via ethers.js        |
+                v                                      |
+    +------------------------+                         |
+    |  Hardhat Development   |                         |
+    |  - Contract compilation|                         |
+    |  - Testing framework   |                         |
+    |  - Deployment scripts  +-------------------------+
+    +------------------------+
+
+3.2 TECHNOLOGY STACK
+--------------------
+
+BLOCKCHAIN LAYER:
+- Platform: Ethereum (Sepolia Testnet)
+- Smart Contract Language: Solidity ^0.8.20
+- Development Framework: Hardhat 2.22.17
+- Library: ethers.js v6
+
+FRONTEND LAYER:
+- Framework: Next.js 14 (App Router)
+- Language: TypeScript 5.7.2
+- Styling: TailwindCSS 3.4.17
+- UI Components: Radix UI primitives + custom shadcn/ui style
+- Icons: Lucide React
+- State: React Context API
+- Build Tool: Next.js built-in
+
+DEVELOPMENT TOOLS:
+- Package Manager: npm
+- Linter: ESLint 8.57.1
+- Testing: Hardhat Network + Chai assertions
+- Version Control: Git
+
+================================================================================
+4. SMART CONTRACT LAYER
+================================================================================
+
+4.1 CONTRACT OVERVIEW
+---------------------
+File: contracts/Escrow.sol
+Contract Name: EscrowMarketplace
+License: MIT
+Solidity Version: ^0.8.20
+
+Purpose: Manages escrow lifecycle from creation to resolution
+
+4.2 DATA MODELS
+---------------
+
+ESROW STATUS ENUM:
+    enum EscrowStatus {
+        PENDING,      // Initial state after creation
+        COMPLETED,    // Funds released to seller
+        REFUNDED      // Funds returned to buyer
+    }
+
+ESCROW STRUCT:
+    struct Escrow {
+        uint256 id;              // Unique identifier (1-indexed)
+        address buyer;           // Creator/funder of escrow
+        address seller;          // Intended recipient of funds
+        uint256 amount;          // ETH amount locked (wei)
+        string description;      // Transaction purpose/details
+        uint256 createdAt;     // Block timestamp of creation
+        EscrowStatus status;   // Current state
+    }
+
+STATE VARIABLES:
+    uint256 public escrowCount;           // Total escrows created
+    mapping(uint256 => Escrow) escrows; // ID to Escrow lookup
+
+4.3 FUNCTIONS & EVENTS
+----------------------
+
+WRITE FUNCTIONS:
+
+1. createEscrow(address _seller, string memory _description) external payable
+   - Creates new escrow with ETH deposit
+   - Validates: non-zero seller, seller != buyer, amount > 0
+   - Emits: EscrowCreated
+   - State changes: escrowCount++, stores new Escrow
+
+2. releasePayment(uint256 _escrowId) external
+   - Transfers locked ETH to seller
+   - Validates: escrow exists, caller is buyer, status is PENDING
+   - Emits: PaymentReleased
+   - State changes: status -> COMPLETED, amount -> 0
+
+3. refundBuyer(uint256 _escrowId) external
+   - Returns locked ETH to buyer
+   - Validates: escrow exists, caller is buyer, status is PENDING
+   - Emits: PaymentRefunded
+   - State changes: status -> REFUNDED, amount -> 0
+
+READ FUNCTIONS:
+
+4. getEscrow(uint256 _escrowId) external view returns (Escrow memory)
+   - Returns single escrow details
+   - Validates: escrow exists
+
+5. getAllEscrows() external view returns (Escrow[] memory)
+   - Returns array of all escrows
+   - Useful for populating dashboards
+
+EVENTS:
+
+    event EscrowCreated(
+        uint256 indexed escrowId,
+        address indexed buyer,
+        address indexed seller,
+        uint256 amount,
+        string description,
+        uint256 createdAt
+    );
+
+    event PaymentReleased(
+        uint256 indexed escrowId,
+        address indexed buyer,
+        address indexed seller,
+        uint256 amount,
+        uint256 releasedAt
+    );
+
+    event PaymentRefunded(
+        uint256 indexed escrowId,
+        address indexed buyer,
+        uint256 amount,
+        uint256 refundedAt
+    );
+
+4.4 SECURITY MECHANISMS
+-----------------------
+
+ACCESS CONTROL:
+- Only buyer can release payment (prevents seller theft)
+- Only buyer can refund (buyer protection)
+- No external party can modify escrow state
+
+VALIDATION:
+- Zero-address checks prevent invalid destinations
+- Self-transaction prevention (buyer != seller)
+- Minimum amount enforcement (> 0 ETH)
+- Escrow existence checks on all ID-based operations
+- Status checks prevent double-spending
+
+FUND SAFETY:
+- ETH transfers use call pattern (reentrancy-safe in this context)
+- Amount zeroed before transfer (prevents reentrancy)
+- No external calls in state-modifying operations except final transfer
+
+GAS OPTIMIZATION:
+- Optimizer enabled with 200 runs
+- Storage packing not applicable (addresses + uint256s don't pack well)
+- Events for off-chain indexing (cheaper than storage reads for history)
+
+================================================================================
+5. FRONTEND APPLICATION
+================================================================================
+
+5.1 FRAMEWORK & STACK
+---------------------
+- Framework: Next.js 14 with App Router
+- Rendering: Server Components (default) + Client Components (interactivity)
+- Styling: TailwindCSS with custom configuration
+- Components: Mix of Radix UI primitives and custom implementations
+- Type Safety: Full TypeScript coverage
+
+5.2 APPLICATION PAGES
+-----------------------
+
+HOME PAGE (src/app/page.tsx):
+- Hero section explaining platform purpose
+- Wallet connection call-to-action
+- Summary statistics for connected wallet
+- Quick navigation to key features
+
+CREATE ESCROW PAGE (src/app/create/page.tsx):
+- Form for new escrow creation
+- Fields: seller address, ETH amount, description
+- Real-time validation
+- Transaction modal with progress states
+
+DASHBOARD PAGE (src/app/dashboard/page.tsx):
+- Role-based filtering tabs (All / As Buyer / As Seller)
+- Status filtering dropdown
+- Responsive layout: table (desktop) / cards (mobile)
+- Action buttons for eligible escrows
+
+ESCROW DETAIL PAGE (src/app/escrow/[id]/page.tsx):
+- Detailed view of single escrow
+- Full transaction history
+- Action availability based on role and status
+
+5.3 COMPONENT ARCHITECTURE
+--------------------------
+
+LAYOUT COMPONENTS:
+- Navbar (src/components/Navbar.tsx): Navigation + wallet status
+- WalletConnect (src/components/WalletConnect.tsx): Connection button + modal
+
+FEATURE COMPONENTS:
+- EscrowCard (src/components/EscrowCard.tsx): Individual escrow display
+- EscrowForm (src/components/EscrowForm.tsx): Creation form logic
+- EscrowTable (src/components/EscrowTable.tsx): Tabular list view
+
+UTILITY COMPONENTS:
+- TransactionModal (src/components/TransactionModal.tsx): Status feedback
+- StatusBadge (src/components/StatusBadge.tsx): Visual status indicators
+- RoleBadge (src/components/RoleBadge.tsx): Buyer/Seller identification
+
+UI PRIMITIVES (src/components/ui/):
+- Button, Card, Input, Textarea
+- Badge, Table, Tabs, Dialog
+- Toast, Skeleton, Label, Select
+
+5.4 STATE MANAGEMENT
+--------------------
+
+GLOBAL STATE (Web3Context):
+- Provider: BrowserProvider instance
+- Signer: Transaction signer
+- Contract: EscrowMarketplace contract instance
+- Address: Connected wallet address
+- ChainId: Current network ID
+- Balance: ETH balance (formatted)
+- isConnecting: Connection state
+
+CONTEXT PROVIDES:
+- connect(): Initiate wallet connection
+- disconnect(): Clear wallet state
+- refreshBalance(): Update ETH balance
+- isSepolia(chainId): Network validation
+
+LOCAL STATE:
+- Form data managed with React useState
+- Transaction status tracked per-operation
+- Filter states for dashboard views
+
+================================================================================
+6. WEB3 INTEGRATION
+================================================================================
+
+6.1 WALLET CONNECTION
+--------------------
+
+DETECTION:
+- Checks for window.ethereum (MetaMask/provider)
+- Graceful degradation if no wallet found
+
+CONNECTION FLOW:
+1. User clicks "Connect Wallet"
+2. Request accounts via eth_requestAccounts
+3. Create BrowserProvider with MetaMask
+4. Get signer and network info
+5. Validate contract address
+6. Instantiate contract with signer
+7. Fetch and display ETH balance
+
+ACCOUNT MANAGEMENT:
+- Listens for accountsChanged events
+- Auto-syncs on account switch
+- Disconnects when all accounts removed
+
+6.2 CONTRACT INTERACTION
+------------------------
+
+READ OPERATIONS (via provider):
+- getAllEscrows(): Populate dashboard
+- getEscrow(id): Detail view
+- No signer required, gas-free
+
+WRITE OPERATIONS (via signer):
+- createEscrow(): Requires ETH value, gas payment
+- releasePayment(): Gas payment, signer must be buyer
+- refundBuyer(): Gas payment, signer must be buyer
+
+EVENT MONITORING:
+- Frontend can listen for contract events
+- EscrowCreated: Update dashboard on new escrows
+- PaymentReleased/Refunded: Status updates
+
+6.3 NETWORK CONFIGURATION
+--------------------------
+
+SUPPORTED NETWORK:
+- Sepolia Testnet (Chain ID: 11155111)
+
+RPC CONFIGURATION:
+- Primary: User-provided Alchemy/Infura URL
+- Fallback: publicnode.com public RPC
+- Configured in hardhat.config.ts + .env.local
+
+AUTO-SWITCHING:
+- Detects if user on wrong network
+- Prompts to switch to Sepolia
+- Full page reload on chain change (ensures clean state)
+
+================================================================================
+7. DEPLOYMENT & OPERATIONS
+================================================================================
+
+7.1 DEVELOPMENT ENVIRONMENT
+---------------------------
+
+REQUIREMENTS:
+- Node.js 18+ and npm 9+
+- MetaMask browser extension
+- Sepolia ETH (from faucet)
+- Alchemy or Infura account (recommended)
+
+ENVIRONMENT FILES:
+
+.env (Backend/Deployment):
+    SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
+    PRIVATE_KEY=your_wallet_private_key_64_chars
+
+.env.local (Frontend):
+    NEXT_PUBLIC_CONTRACT_ADDRESS=0x...
+    NEXT_PUBLIC_SEPOLIA_RPC_URL=https://...
+    NEXT_PUBLIC_DEPLOY_BLOCK=12345678
+
+7.2 TESTING STRATEGY
+--------------------
+
+UNIT TESTS (test/Escrow.test.ts):
+- Escrow creation scenarios
+- Payment release flows
+- Refund mechanisms
+- Access control validation
+- Edge cases (zero amounts, same addresses)
+
+TEST ENVIRONMENT:
+- Hardhat Network (local EVM)
+- 6 test accounts with 10000 ETH each
+- Automatic state reset between test suites
+
+RUNNING TESTS:
+    npm run test
+
+7.3 DEPLOYMENT PROCESS
+----------------------
+
+LOCAL DEVELOPMENT:
+    1. npm install
+    2. npm run compile
+    3. npm run test
+    4. Configure .env
+
+TESTNET DEPLOYMENT:
+    1. Verify .env has valid credentials
+    2. npm run deploy:sepolia
+    3. Copy deployed address from terminal
+    4. Set NEXT_PUBLIC_CONTRACT_ADDRESS in .env.local
+    5. Set NEXT_PUBLIC_DEPLOY_BLOCK (deployment block number)
+    6. npm run dev (start frontend)
+
+VERIFICATION:
+- Contract verifiable on Sepolia Etherscan
+- Frontend connects and loads data
+- Test transactions succeed
+
+================================================================================
+8. USER FLOWS
+================================================================================
+
+8.1 BUYER CREATE ESCROW FLOW
+----------------------------
+
+1. CONNECT
+   - Visit homepage
+   - Click "Connect Wallet"
+   - Approve connection in MetaMask
+   - Auto-switch to Sepolia if needed
+
+2. CREATE
+   - Navigate to "Create Escrow"
+   - Enter seller's wallet address
+   - Enter ETH amount
+   - Add description of transaction
+   - Click "Create Escrow"
+   - Confirm in MetaMask (sends ETH + gas)
+
+3. WAIT
+   - Transaction mines (~12-30 seconds)
+   - See success notification with Etherscan link
+   - Escrow appears in Dashboard
+
+8.2 BUYER RELEASE PAYMENT FLOW
+------------------------------
+
+1. REVIEW
+   - Go to Dashboard
+   - Switch to "As Buyer" tab
+   - Find escrow in PENDING status
+
+2. RELEASE
+   - Click "Release Payment"
+   - Review confirmation modal
+   - Confirm in MetaMask
+
+3. CONFIRM
+   - Transaction mines
+   - Status updates to COMPLETED
+   - Seller receives ETH
+
+8.3 BUYER REFUND FLOW
+---------------------
+
+1. REVIEW
+   - Go to Dashboard
+   - Find PENDING escrow as buyer
+
+2. REFUND
+   - Click "Refund"
+   - Confirm refund intention
+   - Approve in MetaMask
+
+3. RECEIVE
+   - Transaction mines
+   - Status updates to REFUNDED
+   - ETH returns to buyer wallet
+
+8.4 SELLER VIEW FLOW
+--------------------
+
+1. CONNECT
+   - Connect wallet as seller address
+
+2. MONITOR
+   - View Dashboard with "As Seller" filter
+   - See incoming escrows created by buyers
+
+3. RECEIVE
+   - Wait for buyer to release payment
+   - See status change to COMPLETED
+   - Funds appear in wallet
+
+================================================================================
+9. SECURITY CONSIDERATIONS
+================================================================================
+
+9.1 SMART CONTRACT SECURITY
+----------------------------
+
+KNOWN LIMITATIONS:
+- Buyer has sole control (no seller protection)
+- No dispute resolution mechanism
+- No arbitration or multi-sig options
+- Single contract (no factory pattern)
+
+ATTACK VECTORS MITIGATED:
+- Reentrancy: Amount zeroed before transfer
+- Access control: strict msg.sender checks
+- Integer overflow: Solidity 0.8+ checked arithmetic
+- DOS: No unbounded loops in production paths
+
+AUDIT STATUS: NOT AUDITED - Educational use only
+
+9.2 OPERATIONAL SECURITY
+------------------------
+
+PRIVATE KEY HANDLING:
+- Never commit private keys to version control
+- Use .env files (gitignored)
+- Use separate deployment wallet
+
+FRONTEND SECURITY:
+- No sensitive data in localStorage
+- Contract address validation before instantiation
+- Input sanitization on all user data
+
+USER WARNINGS:
+- Testnet only (no mainnet funds)
+- Clear educational disclaimer
+- Gas costs explained before transactions
+
+================================================================================
+10. PROJECT STRUCTURE
+================================================================================
+
+escrow-marketplace/
+├── contracts/
+│   └── Escrow.sol                    # Solidity smart contract
+├── scripts/
+│   └── deploy.ts                     # Deployment script
+├── test/
+│   └── Escrow.test.ts               # Contract tests
+├── src/
+│   ├── app/                          # Next.js App Router
+│   │   ├── page.tsx                  # Homepage
+│   │   ├── layout.tsx                # Root layout
+│   │   ├── create/page.tsx           # Create escrow page
+│   │   ├── dashboard/page.tsx        # Dashboard page
+│   │   ├── escrow/[id]/page.tsx      # Escrow detail page
+│   │   ├── globals.css               # Global styles
+│   │   └── error.tsx                 # Error boundary
+│   ├── components/
+│   │   ├── Navbar.tsx                # Navigation bar
+│   │   ├── WalletConnect.tsx         # Wallet connection UI
+│   │   ├── EscrowCard.tsx            # Escrow display card
+│   │   ├── EscrowForm.tsx            # Creation form
+│   │   ├── EscrowTable.tsx           # List table
+│   │   ├── TransactionModal.tsx      # Status modal
+│   │   ├── StatusBadge.tsx           # Status indicator
+│   │   ├── RoleBadge.tsx             # Role indicator
+│   │   └── ui/                       # UI primitives
+│   │       ├── button.tsx
+│   │       ├── card.tsx
+│   │       ├── input.tsx
+│   │       ├── textarea.tsx
+│   │       ├── badge.tsx
+│   │       ├── table.tsx
+│   │       ├── tabs.tsx
+│   │       ├── dialog.tsx
+│   │       ├── toast.tsx
+│   │       ├── skeleton.tsx
+│   │       ├── label.tsx
+│   │       └── select.tsx
+│   ├── context/
+│   │   └── Web3Context.tsx           # Web3 state management
+│   ├── lib/
+│   │   ├── web3.ts                   # Web3 utilities
+│   │   ├── contract.ts               # Contract interactions
+│   │   └── abi.json                  # Contract ABI
+│   └── types/
+│       └── index.ts                  # TypeScript types
+├── artifacts/                        # Compiled contract artifacts
+├── cache/                           # Hardhat cache
+├── typechain-types/                 # TypeChain generated types
+├── hardhat.config.ts                # Hardhat configuration
+├── next.config.js                   # Next.js configuration
+├── tailwind.config.ts               # TailwindCSS configuration
+├── tsconfig.json                    # TypeScript configuration
+├── postcss.config.js                # PostCSS configuration
+├── package.json                     # Dependencies & scripts
+├── .env                             # Backend environment (gitignored)
+├── .env.local                       # Frontend environment (gitignored)
+└── README.md                        # Quick start guide
+
+================================================================================
+11. SETUP INSTRUCTIONS
+================================================================================
+
+11.1 INITIAL SETUP
+------------------
+
+1. Clone repository:
+   git clone <repository-url>
+   cd escrow-marketplace
+
+2. Install dependencies:
+   npm install
+
+11.2 BACKEND CONFIGURATION
+--------------------------
+
+3. Configure environment:
+   Create .env file with:
+   SEPOLIA_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/YOUR_KEY
+   PRIVATE_KEY=your_deployer_private_key_no_0x
+
+4. Compile contracts:
+   npm run compile
+
+5. Run tests:
+   npm run test
+
+6. Deploy to Sepolia:
+   npm run deploy:sepolia
+
+   Copy the deployed contract address from output.
+
+11.3 FRONTEND CONFIGURATION
+---------------------------
+
+7. Configure frontend environment:
+   Create .env.local file with:
+   NEXT_PUBLIC_CONTRACT_ADDRESS=0x_deployed_address_here
+   NEXT_PUBLIC_SEPOLIA_RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
+   NEXT_PUBLIC_DEPLOY_BLOCK=block_number_of_deployment
+
+8. Start development server:
+   npm run dev
+
+9. Open browser:
+   Navigate to http://localhost:3000
+
+11.4 PRODUCTION BUILD
+---------------------
+
+10. Create production build:
+    npm run build
+
+11. Start production server:
+    npm start
+
+================================================================================
+12. TECHNICAL GLOSSARY
+================================================================================
+
+WEB3 TERMS:
+-----------
+Escrow: A financial arrangement where a third party holds funds until
+        transaction conditions are met. In this project, the smart contract
+        acts as the third party.
+
+Smart Contract: Self-executing code on the blockchain that automatically
+                  enforces agreement terms.
+
+MetaMask: Browser extension wallet for managing Ethereum accounts and
+          signing transactions.
+
+Sepolia: Ethereum test network where developers test applications without
+         risking real ETH.
+
+Gas: Fee paid to network validators for processing transactions.
+
+Wallet Address: Unique identifier for an Ethereum account (42 characters,
+                starting with 0x).
+
+Private Key: Secret 64-character string that proves ownership of a wallet.
+             Must be kept secure - anyone with the key controls the funds.
+
+Dapp: Decentralized application - combines smart contracts with frontend UI.
+
+DEVELOPMENT TERMS:
+------------------
+Hardhat: Development environment for Ethereum with testing, debugging,
+         and deployment tools.
+
+ethers.js: JavaScript library for interacting with Ethereum blockchain.
+
+Next.js: React framework with server-side rendering and static generation.
+
+TypeScript: Typed superset of JavaScript for safer code.
+
+TailwindCSS: Utility-first CSS framework for rapid UI development.
+
+ABI: Application Binary Interface - defines how to interact with a smart
+     contract from external code.
+
+TypeChain: Generates TypeScript types from smart contract ABIs.
+
+RPC: Remote Procedure Call - how frontend connects to blockchain nodes.
+
+================================================================================
+                          DOCUMENT END
+================================================================================
