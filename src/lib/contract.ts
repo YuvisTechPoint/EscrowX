@@ -4,6 +4,9 @@ import { getEnvStatus, requireContractAddress } from "@/lib/env";
 import { getPublicProvider, getSigner } from "@/lib/web3";
 import type { Escrow, EscrowActivity } from "@/types";
 
+const FALLBACK_ACTIVITY_RPC_URL = "https://ethereum-sepolia-rpc.publicnode.com";
+const ACTIVITY_SCAN_WINDOW = 5_000;
+
 function getDeployBlock(): number | null {
   return getEnvStatus().deployBlock;
 }
@@ -11,8 +14,8 @@ function getDeployBlock(): number | null {
 async function getEventBlockRange(provider: { getBlockNumber: () => Promise<number> }) {
   const latest = await provider.getBlockNumber();
   const deployBlock = getDeployBlock();
-  const maxWindow = 80_000; // keeps RPCs happy on public endpoints
-  const from = Math.max(0, (deployBlock ?? latest - maxWindow));
+  const windowFloor = Math.max(0, latest - ACTIVITY_SCAN_WINDOW);
+  const from = deployBlock ? Math.max(windowFloor, deployBlock) : windowFloor;
   return { fromBlock: from, toBlock: latest };
 }
 
@@ -187,6 +190,115 @@ type ActivityCache = {
 
 let activityCache: ActivityCache | null = null;
 
+type ActivityLogs = {
+  createdLogs: any[];
+  releasedLogs: any[];
+  refundedLogs: any[];
+};
+
+function isLikelyGetLogsRangeError(error: unknown): boolean {
+  const message = String((error as { message?: string })?.message ?? "").toLowerCase();
+  return (
+    message.includes("eth_getlogs") ||
+    message.includes("block range") ||
+    message.includes("could not coalesce error")
+  );
+}
+
+function extractSuggestedBlockRange(error: unknown): number | null {
+  const message = String((error as { message?: string })?.message ?? "");
+  const match = message.match(/up to a\s+(\d+)\s+block range/i);
+  if (!match) return null;
+
+  const parsed = Number(match[1]);
+  if (!Number.isFinite(parsed) || parsed < 1) return null;
+  return Math.floor(parsed);
+}
+
+async function queryFilterAdaptive(
+  contract: Contract,
+  filter: any,
+  fromBlock: number,
+  toBlock: number
+): Promise<any[]> {
+  const totalWindow = Math.max(1, toBlock - fromBlock + 1);
+  const windowCandidates = [totalWindow, 2_000, 500, 100, 10];
+  const seen = new Set<number>();
+  let lastError: unknown;
+
+  for (let i = 0; i < windowCandidates.length; i += 1) {
+    const candidate = Math.max(1, Math.min(totalWindow, windowCandidates[i]));
+    if (seen.has(candidate)) continue;
+    seen.add(candidate);
+
+    const candidateFrom = Math.max(fromBlock, toBlock - candidate + 1);
+
+    try {
+      return await contract.queryFilter(filter, candidateFrom, toBlock);
+    } catch (error) {
+      lastError = error;
+      const suggested = extractSuggestedBlockRange(error);
+      if (suggested && !seen.has(suggested)) {
+        windowCandidates.push(suggested);
+      }
+    }
+  }
+
+  throw lastError ?? new Error("Failed to query activity logs");
+}
+
+async function queryActivityLogsForContract(
+  contract: Contract,
+  fromBlock: number,
+  toBlock: number,
+  escrowId?: bigint
+): Promise<ActivityLogs> {
+  const createdFilter = escrowId !== undefined
+    ? contract.filters.EscrowCreated(escrowId)
+    : contract.filters.EscrowCreated();
+  const releasedFilter = escrowId !== undefined
+    ? contract.filters.PaymentReleased(escrowId)
+    : contract.filters.PaymentReleased();
+  const refundedFilter = escrowId !== undefined
+    ? contract.filters.PaymentRefunded(escrowId)
+    : contract.filters.PaymentRefunded();
+
+  const [createdLogs, releasedLogs, refundedLogs] = await Promise.all([
+    queryFilterAdaptive(contract, createdFilter, fromBlock, toBlock),
+    queryFilterAdaptive(contract, releasedFilter, fromBlock, toBlock),
+    queryFilterAdaptive(contract, refundedFilter, fromBlock, toBlock),
+  ]);
+
+  return { createdLogs, releasedLogs, refundedLogs };
+}
+
+async function queryActivityLogsWithFallback(
+  primaryContract: Contract,
+  fromBlock: number,
+  toBlock: number,
+  escrowId?: bigint
+): Promise<ActivityLogs> {
+  try {
+    return await queryActivityLogsForContract(primaryContract, fromBlock, toBlock, escrowId);
+  } catch (primaryError) {
+    if (!isLikelyGetLogsRangeError(primaryError)) {
+      throw primaryError;
+    }
+
+    const contractAddress = await primaryContract.getAddress();
+    const fallbackProvider = new ethers.JsonRpcProvider(FALLBACK_ACTIVITY_RPC_URL);
+    const fallbackContract = new Contract(contractAddress, abi, fallbackProvider);
+    const fallbackRange = await getEventBlockRange(fallbackProvider);
+
+    return queryActivityLogsForContract(
+      fallbackContract,
+      fallbackRange.fromBlock,
+      fallbackRange.toBlock,
+      escrowId
+    );
+  }
+}
+
 export async function getEscrowActivities(limit = 25): Promise<EscrowActivity[]> {
   try {
     const contract = await getContract(false);
@@ -198,11 +310,11 @@ export async function getEscrowActivities(limit = 25): Promise<EscrowActivity[]>
       return activityCache.value;
     }
 
-    const [createdLogs, releasedLogs, refundedLogs] = await Promise.all([
-      contract.queryFilter(contract.filters.EscrowCreated(), range.fromBlock, range.toBlock),
-      contract.queryFilter(contract.filters.PaymentReleased(), range.fromBlock, range.toBlock),
-      contract.queryFilter(contract.filters.PaymentRefunded(), range.fromBlock, range.toBlock),
-    ]);
+    const { createdLogs, releasedLogs, refundedLogs } = await queryActivityLogsWithFallback(
+      contract,
+      range.fromBlock,
+      range.toBlock
+    );
 
     const activityPromises = [
       ...createdLogs.map(async (log: any): Promise<EscrowActivity> => {
@@ -252,7 +364,7 @@ export async function getEscrowActivities(limit = 25): Promise<EscrowActivity[]>
     return result;
   } catch (error) {
     console.error("getEscrowActivities error:", error);
-    throw error;
+    return [];
   }
 }
 
@@ -266,11 +378,12 @@ export async function getEscrowActivitiesForEscrow(
     const provider = getPublicProvider();
     const range = await getEventBlockRange(provider);
 
-    const [createdLogs, releasedLogs, refundedLogs] = await Promise.all([
-      contract.queryFilter(contract.filters.EscrowCreated(id), range.fromBlock, range.toBlock),
-      contract.queryFilter(contract.filters.PaymentReleased(id), range.fromBlock, range.toBlock),
-      contract.queryFilter(contract.filters.PaymentRefunded(id), range.fromBlock, range.toBlock),
-    ]);
+    const { createdLogs, releasedLogs, refundedLogs } = await queryActivityLogsWithFallback(
+      contract,
+      range.fromBlock,
+      range.toBlock,
+      id
+    );
 
     const activityPromises = [
       ...createdLogs.map(async (log: any): Promise<EscrowActivity> => {
@@ -317,6 +430,6 @@ export async function getEscrowActivitiesForEscrow(
       .slice(0, Math.max(1, limit));
   } catch (error) {
     console.error("getEscrowActivitiesForEscrow error:", error);
-    throw error;
+    return [];
   }
 }
